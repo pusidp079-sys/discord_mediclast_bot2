@@ -243,4 +243,15 @@ msg.embeds[0].description.replace(
   }
 });
 
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => res.send("Bot is alive"));
+app.get("/health", (req, res) => res.send("OK"));
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Web server ready");
+});
+
+
 client.login(TOKEN);
