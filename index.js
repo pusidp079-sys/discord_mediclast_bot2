@@ -21,14 +21,13 @@ app.listen(10000, () => console.log("🌐 Web server running"));
 /* ===== ENV ===== */
 
 const TOKEN = process.env.TOKEN;
-const GUILD_ID = process.env.GUILD_ID;
 const TARGET_CHANNEL_ID = process.env.TARGET_CHANNEL_ID;
 const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
 if (!TOKEN) {
-console.log("❌ TOKEN not found in Environment Variables");
+console.log("❌ TOKEN not found");
 process.exit(1);
 }
 
@@ -37,8 +36,7 @@ process.exit(1);
 const client = new Client({
 intents: [
 GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMembers,
-GatewayIntentBits.GuildMessages
+GatewayIntentBits.GuildMembers
 ]
 });
 
@@ -46,9 +44,11 @@ client.once("ready", () => {
 console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-/* ===== COMMAND ===== */
+/* ===== INTERACTION ===== */
 
 client.on(Events.InteractionCreate, async interaction => {
+
+/* ===== COMMAND ===== */
 
 if (interaction.isChatInputCommand()) {
 
@@ -85,7 +85,7 @@ await interaction.showModal(modal);
 
 }
 
-/* ===== MODAL SUBMIT ===== */
+/* ===== MODAL ===== */
 
 if (interaction.isModalSubmit()) {
 
@@ -255,7 +255,5 @@ new EmbedBuilder()
 }
 
 });
-
-/* ===== LOGIN ===== */
 
 client.login(TOKEN);
