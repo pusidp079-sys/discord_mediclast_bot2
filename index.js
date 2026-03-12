@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-/* ===== Render 24H keep alive ===== */
+/* ===== Render keep alive ===== */
 const express = require("express");
 const app = express();
 
@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
 console.log("Web server running on port " + PORT);
 });
-/* ================================= */
+/* ============================= */
 
 const {
 Client, GatewayIntentBits,
@@ -31,7 +31,9 @@ APPROVER_ROLE_ID,
 NOTIFY_ROLE_ID
 } = process.env;
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+intents: [GatewayIntentBits.Guilds]
+});
 
 const commands = [
 new SlashCommandBuilder()
@@ -39,16 +41,19 @@ new SlashCommandBuilder()
 .setDescription("เปิดแผงยื่นคำขอลา"),
 ].map(c => c.toJSON());
 
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-async function registerCommands(){
+async function registerCommands() {
 if (!CLIENT_ID || !GUILD_ID) return;
-await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+await rest.put(
+Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+{ body: commands }
+);
 }
 
 const leaveState = new Map();
 
-function thaiDate(date){
+function thaiDate(date) {
 return date.toLocaleDateString("th-TH", {
 year: "numeric",
 month: "long",
@@ -56,9 +61,9 @@ day: "numeric"
 });
 }
 
-function countDays(start, end){
+function countDays(start, end) {
 const diff = end - start;
-return Math.floor(diff / (1000*60*60*24)) + 1;
+return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
 }
 
 client.once(Events.ClientReady, async () => {
@@ -70,7 +75,9 @@ client.on(Events.InteractionCreate, async interaction => {
 try {
 
 ```
+/* ===== Slash Command ===== */
 if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
+
   const embed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle("📄 แบบฟอร์มยื่นคำขอลา")
@@ -87,16 +94,18 @@ if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
   });
 }
 
+/* ===== Button ===== */
 if (interaction.isButton() && interaction.customId === "leave_request") {
+
   leaveState.set(interaction.user.id, {});
 
   const yearMenu = new StringSelectMenuBuilder()
     .setCustomId("year")
     .setPlaceholder("เลือกปี")
     .addOptions(
-      Array.from({length: 5}, (_,i)=> {
+      Array.from({ length: 5 }, (_, i) => {
         const y = new Date().getFullYear() + i + 543;
-        return { label: String(y), value: String(y-543) };
+        return { label: String(y), value: String(y - 543) };
       })
     );
 
@@ -107,19 +116,23 @@ if (interaction.isButton() && interaction.customId === "leave_request") {
   });
 }
 
+/* ===== Select Menu ===== */
 if (interaction.isStringSelectMenu()) {
+
   const state = leaveState.get(interaction.user.id) || {};
   const value = interaction.values[0];
 
+  /* เลือกปี */
   if (interaction.customId === "year") {
+
     state.year = Number(value);
 
     const monthMenu = new StringSelectMenuBuilder()
       .setCustomId("month")
       .setPlaceholder("เลือกเดือน")
       .addOptions(
-        Array.from({length:12}, (_,i)=>({
-          label: new Date(2000,i).toLocaleString("th-TH",{month:"long"}),
+        Array.from({ length: 12 }, (_, i) => ({
+          label: new Date(2000, i).toLocaleString("th-TH", { month: "long" }),
           value: String(i)
         }))
       );
@@ -132,14 +145,21 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
+  /* เลือกเดือน */
   if (interaction.customId === "month") {
+
     state.month = Number(value);
-    const days = new Date(state.year, state.month+1, 0).getDate();
+    const days = new Date(state.year, state.month + 1, 0).getDate();
 
     const ranges = [];
+
     for (let i = 1; i <= days; i += 25) {
       const end = Math.min(i + 24, days);
-      ranges.push({ label: `วันที่ ${i} - ${end}`, value: `${i}-${end}` });
+
+      ranges.push({
+        label: `วันที่ ${i} - ${end}`,
+        value: `${i}-${end}`
+      });
     }
 
     const rangeMenu = new StringSelectMenuBuilder()
@@ -155,9 +175,10 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
+  /* เลือกช่วงวัน */
   if (interaction.customId === "day_range") {
-    const state = leaveState.get(interaction.user.id);
-    const [start, end] = interaction.values[0].split("-").map(Number);
+
+    const [start, end] = value.split("-").map(Number);
 
     const dayMenu = new StringSelectMenuBuilder()
       .setCustomId("day")
@@ -175,7 +196,9 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
+  /* เลือกวัน */
   if (interaction.customId === "day") {
+
     state.day = Number(value);
     leaveState.set(interaction.user.id, state);
 
@@ -197,7 +220,9 @@ if (interaction.isStringSelectMenu()) {
   }
 }
 
+/* ===== Modal Submit ===== */
 if (interaction.isModalSubmit() && interaction.customId === "reason_modal") {
+
   const state = leaveState.get(interaction.user.id);
   const reason = interaction.fields.getTextInputValue("reason");
 
@@ -225,11 +250,19 @@ ${reason}
 
 ```
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`approve_${interaction.user.id}`).setLabel("อนุมัติ").setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`reject_${interaction.user.id}`).setLabel("ปฏิเสธ").setStyle(ButtonStyle.Danger)
+    new ButtonBuilder()
+      .setCustomId(`approve_${interaction.user.id}`)
+      .setLabel("อนุมัติ")
+      .setStyle(ButtonStyle.Success),
+
+    new ButtonBuilder()
+      .setCustomId(`reject_${interaction.user.id}`)
+      .setLabel("ปฏิเสธ")
+      .setStyle(ButtonStyle.Danger)
   );
 
   const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
+
   await channel.send({
     content: NOTIFY_ROLE_ID ? `<@&${NOTIFY_ROLE_ID}>` : undefined,
     embeds: [embed],
@@ -237,17 +270,26 @@ ${reason}
   });
 
   leaveState.delete(interaction.user.id);
-  return interaction.reply({ content: "ส่งคำขอแล้ว", ephemeral: true });
+
+  return interaction.reply({
+    content: "ส่งคำขอแล้ว",
+    ephemeral: true
+  });
 }
 ```
 
 } catch (err) {
+
+```
 console.error(err);
+
 if (interaction.deferred || interaction.replied) {
-interaction.editReply({ content: "เกิดข้อผิดพลาด" });
+  interaction.editReply({ content: "เกิดข้อผิดพลาด" });
 } else {
-interaction.reply({ content: "เกิดข้อผิดพลาด", ephemeral: true });
+  interaction.reply({ content: "เกิดข้อผิดพลาด", ephemeral: true });
 }
+```
+
 }
 });
 
