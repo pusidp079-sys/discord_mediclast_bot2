@@ -1,5 +1,5 @@
 {
-"name": "discord-leave-bot",
+"name": "leave-bot",
 "version": "1.0.0",
 "main": "index.js",
 "scripts": {
