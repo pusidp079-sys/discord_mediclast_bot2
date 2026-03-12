@@ -11,40 +11,73 @@ EmbedBuilder,
 ModalBuilder,
 TextInputBuilder,
 TextInputStyle,
-Events
+Events,
+REST,
+Routes,
+SlashCommandBuilder
 } = require("discord.js");
 
+/* ================= WEB SERVER ================= */
+
 const app = express();
-app.get("/", (req, res) => res.send("Bot is running"));
+app.get("/", (req, res) => res.send("Bot running"));
 app.listen(10000, () => console.log("🌐 Web server running"));
 
-/* ===== ENV ===== */
+/* ================= ENV ================= */
 
 const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 const TARGET_CHANNEL_ID = process.env.TARGET_CHANNEL_ID;
 const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
 if (!TOKEN) {
-console.log("❌ TOKEN not found");
+console.log("❌ TOKEN missing");
 process.exit(1);
 }
 
-/* ===== CLIENT ===== */
+/* ================= CLIENT ================= */
 
 const client = new Client({
-intents: [
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMembers
-]
+intents: [GatewayIntentBits.Guilds]
 });
+
+/* ================= REGISTER COMMAND ================= */
+
+const commands = [
+new SlashCommandBuilder()
+.setName("ลา")
+.setDescription("ส่งคำขอลา")
+].map(cmd => cmd.toJSON());
+
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+
+(async () => {
+try {
+
+await rest.put(
+Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+{ body: commands }
+);
+
+console.log("✅ Slash command registered");
+
+} catch (error) {
+console.error(error);
+}
+})();
+
+/* ================= READY ================= */
 
 client.once("ready", () => {
+
 console.log(`✅ Logged in as ${client.user.tag}`);
+
 });
 
-/* ===== INTERACTION ===== */
+/* ================= INTERACTION ================= */
 
 client.on(Events.InteractionCreate, async interaction => {
 
@@ -112,6 +145,7 @@ ${reason}
 .setTimestamp();
 
 const buttons = new ActionRowBuilder().addComponents(
+
 new ButtonBuilder()
 .setCustomId(`approve_${interaction.user.id}`)
 .setLabel("อนุมัติ")
@@ -121,11 +155,12 @@ new ButtonBuilder()
 .setCustomId(`reject_${interaction.user.id}`)
 .setLabel("ปฏิเสธ")
 .setStyle(ButtonStyle.Danger)
+
 );
 
 const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
 
-channel.send({
+await channel.send({
 content: `<@&${NOTIFY_ROLE_ID}>`,
 embeds: [embed],
 components: [buttons]
@@ -146,12 +181,10 @@ if (interaction.isButton()) {
 
 if (interaction.customId.startsWith("approve_") || interaction.customId.startsWith("reject_")) {
 
-const hasRole = interaction.member.roles.cache.has(APPROVER_ROLE_ID);
-
-if (!hasRole) {
+if (!interaction.member.roles.cache.has(APPROVER_ROLE_ID)) {
 
 return interaction.reply({
-content: "❌ คุณไม่มีสิทธิ์อนุมัติ",
+content: "❌ คุณไม่มีสิทธิ์",
 ephemeral: true
 });
 
@@ -170,19 +203,17 @@ ephemeral: true
 
 const userId = interaction.customId.split("_")[1];
 
-const member = await interaction.guild.members.fetch(userId).catch(()=>null);
-
-let statusText = "";
+let status = "";
 let color = 0x2b2d31;
 
 if (interaction.customId.startsWith("approve_")) {
 
-statusText = "✅ อนุมัติแล้ว";
+status = "✅ อนุมัติแล้ว";
 color = 0x57F287;
 
 } else {
 
-statusText = "❌ ปฏิเสธ";
+status = "❌ ปฏิเสธ";
 color = 0xED4245;
 
 }
@@ -192,7 +223,7 @@ const newEmbed = EmbedBuilder.from(embed)
 .setDescription(
 embed.description.replace(
 "⏳ สถานะ: รออนุมัติ",
-`${statusText}
+`${status}
 👮 ผู้อนุมัติ: ${interaction.user}`
 )
 );
@@ -204,6 +235,8 @@ components: []
 
 /* ===== DM USER ===== */
 
+const member = await interaction.guild.members.fetch(userId).catch(()=>null);
+
 if (member) {
 
 try {
@@ -211,9 +244,9 @@ try {
 await member.send({
 embeds: [
 new EmbedBuilder()
-.setTitle("ผลการพิจารณาคำขอลา")
+.setTitle("ผลคำขอลา")
 .setDescription(
-`สถานะ: ${statusText}
+`สถานะ: ${status}
 ผู้อนุมัติ: ${interaction.user}`
 )
 .setColor(color)
@@ -238,7 +271,7 @@ new EmbedBuilder()
 .setTitle("📋 Log ระบบลา")
 .setDescription(
 `ผู้ยื่น: <@${userId}>
-ผล: ${statusText}
+ผล: ${status}
 ผู้อนุมัติ: ${interaction.user}`
 )
 .setColor(color)
