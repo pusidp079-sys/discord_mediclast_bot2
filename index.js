@@ -33,24 +33,23 @@ const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
-if (!TOKEN) {
-console.log("❌ TOKEN missing");
-process.exit(1);
-}
-
 /* ================= CLIENT ================= */
 
 const client = new Client({
 intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= REGISTER COMMAND ================= */
+/* ================= COMMAND ================= */
 
 const commands = [
 new SlashCommandBuilder()
 .setName("ลา")
-.setDescription("ส่งคำขอลา")
-].map(cmd => cmd.toJSON());
+.setDescription("ส่งคำขอลา"),
+
+new SlashCommandBuilder()
+.setName("panel")
+.setDescription("สร้างแผงยื่นคำขอลา")
+].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -64,8 +63,8 @@ Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 
 console.log("✅ Slash command registered");
 
-} catch (error) {
-console.error(error);
+} catch (err) {
+console.error(err);
 }
 })();
 
@@ -81,103 +80,60 @@ console.log(`✅ Logged in as ${client.user.tag}`);
 
 client.on(Events.InteractionCreate, async interaction => {
 
-/* ===== COMMAND ===== */
+try {
+
+/* ================= COMMAND ================= */
 
 if (interaction.isChatInputCommand()) {
 
+if (interaction.commandName === "panel") {
+
+const embed = new EmbedBuilder()
+.setTitle("📄 แบบฟอร์มยื่นคำขอลา")
+.setDescription(
+`กดปุ่มด้านล่างเพื่อยื่นคำขอลา
+────────────
+ระบบลาออนไลน์`
+)
+.setColor(0x2b2d31);
+
+const button = new ButtonBuilder()
+.setCustomId("leave_request")
+.setLabel("ยื่นคำขอลา")
+.setStyle(ButtonStyle.Primary);
+
+const row = new ActionRowBuilder().addComponents(button);
+
+await interaction.reply({
+embeds: [embed],
+components: [row]
+});
+
+}
+
 if (interaction.commandName === "ลา") {
 
-const modal = new ModalBuilder()
-.setCustomId("leave_modal")
-.setTitle("คำขอลา");
-
-const start = new TextInputBuilder()
-.setCustomId("start")
-.setLabel("วันที่เริ่มลา")
-.setStyle(TextInputStyle.Short);
-
-const end = new TextInputBuilder()
-.setCustomId("end")
-.setLabel("วันที่สิ้นสุด")
-.setStyle(TextInputStyle.Short);
-
-const reason = new TextInputBuilder()
-.setCustomId("reason")
-.setLabel("เหตุผล")
-.setStyle(TextInputStyle.Paragraph);
-
-modal.addComponents(
-new ActionRowBuilder().addComponents(start),
-new ActionRowBuilder().addComponents(end),
-new ActionRowBuilder().addComponents(reason)
-);
-
+const modal = createLeaveModal();
 await interaction.showModal(modal);
 
 }
 
 }
 
-/* ===== MODAL ===== */
-
-if (interaction.isModalSubmit()) {
-
-if (interaction.customId === "leave_modal") {
-
-const start = interaction.fields.getTextInputValue("start");
-const end = interaction.fields.getTextInputValue("end");
-const reason = interaction.fields.getTextInputValue("reason");
-
-const embed = new EmbedBuilder()
-.setTitle("📄 คำขอลา")
-.setDescription(
-`👤 ผู้ยื่น: ${interaction.user}
-
-📅 วันที่เริ่ม: ${start}
-📅 วันที่สิ้นสุด: ${end}
-
-📝 เหตุผล:
-${reason}
-
-⏳ สถานะ: รออนุมัติ`
-)
-.setColor(0x2b2d31)
-.setTimestamp();
-
-const buttons = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId(`approve_${interaction.user.id}`)
-.setLabel("อนุมัติ")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId(`reject_${interaction.user.id}`)
-.setLabel("ปฏิเสธ")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
-
-await channel.send({
-content: `<@&${NOTIFY_ROLE_ID}>`,
-embeds: [embed],
-components: [buttons]
-});
-
-await interaction.reply({
-content: "✅ ส่งคำขอลาเรียบร้อย",
-ephemeral: true
-});
-
-}
-
-}
-
-/* ===== BUTTON ===== */
+/* ================= BUTTON ================= */
 
 if (interaction.isButton()) {
+
+/* ===== PANEL BUTTON ===== */
+
+if (interaction.customId === "leave_request") {
+
+const modal = createLeaveModal();
+return interaction.showModal(modal);
+
+}
+
+/* ===== APPROVE / REJECT ===== */
 
 if (interaction.customId.startsWith("approve_") || interaction.customId.startsWith("reject_")) {
 
@@ -261,11 +217,11 @@ new EmbedBuilder()
 
 if (LOG_CHANNEL_ID) {
 
-const logChannel = await client.channels.fetch(LOG_CHANNEL_ID).catch(()=>null);
+const log = await client.channels.fetch(LOG_CHANNEL_ID).catch(()=>null);
 
-if (logChannel) {
+if (log) {
 
-logChannel.send({
+log.send({
 embeds: [
 new EmbedBuilder()
 .setTitle("📋 Log ระบบลา")
@@ -287,6 +243,109 @@ new EmbedBuilder()
 
 }
 
+/* ================= MODAL ================= */
+
+if (interaction.isModalSubmit()) {
+
+if (interaction.customId === "leave_modal") {
+
+const start = interaction.fields.getTextInputValue("start");
+const end = interaction.fields.getTextInputValue("end");
+const reason = interaction.fields.getTextInputValue("reason");
+
+const embed = new EmbedBuilder()
+.setTitle("📄 คำขอลา")
+.setDescription(
+`👤 ผู้ยื่น: ${interaction.user}
+
+📅 วันที่เริ่ม: ${start}
+📅 วันที่สิ้นสุด: ${end}
+
+📝 เหตุผล:
+${reason}
+
+⏳ สถานะ: รออนุมัติ`
+)
+.setColor(0x2b2d31)
+.setTimestamp();
+
+const buttons = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId(`approve_${interaction.user.id}`)
+.setLabel("อนุมัติ")
+.setStyle(ButtonStyle.Success),
+
+new ButtonBuilder()
+.setCustomId(`reject_${interaction.user.id}`)
+.setLabel("ปฏิเสธ")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
+
+await channel.send({
+content: `<@&${NOTIFY_ROLE_ID}>`,
+embeds: [embed],
+components: [buttons]
 });
+
+await interaction.reply({
+content: "✅ ส่งคำขอลาเรียบร้อย",
+ephemeral: true
+});
+
+}
+
+}
+
+} catch (err) {
+
+console.error(err);
+
+if (interaction.replied || interaction.deferred) return;
+
+interaction.reply({
+content: "❌ ระบบเกิดข้อผิดพลาด",
+ephemeral: true
+});
+
+}
+
+});
+
+/* ================= MODAL FUNCTION ================= */
+
+function createLeaveModal(){
+
+const modal = new ModalBuilder()
+.setCustomId("leave_modal")
+.setTitle("คำขอลา");
+
+const start = new TextInputBuilder()
+.setCustomId("start")
+.setLabel("วันที่เริ่มลา")
+.setStyle(TextInputStyle.Short);
+
+const end = new TextInputBuilder()
+.setCustomId("end")
+.setLabel("วันที่สิ้นสุด")
+.setStyle(TextInputStyle.Short);
+
+const reason = new TextInputBuilder()
+.setCustomId("reason")
+.setLabel("เหตุผล")
+.setStyle(TextInputStyle.Paragraph);
+
+modal.addComponents(
+new ActionRowBuilder().addComponents(start),
+new ActionRowBuilder().addComponents(end),
+new ActionRowBuilder().addComponents(reason)
+);
+
+return modal;
+
+}
 
 client.login(TOKEN);
