@@ -1,6 +1,7 @@
-require('dotenv').config();
+require("dotenv").config();
 
-/* ===== Render keep alive ===== */
+/* ========= KEEP ALIVE (Render) ========= */
+
 const express = require("express");
 const app = express();
 
@@ -12,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
 console.log("Web server running on port " + PORT);
 });
-/* ============================= */
+
+/* ====================================== */
 
 const {
 Client,
@@ -20,6 +22,7 @@ GatewayIntentBits,
 ActionRowBuilder,
 ButtonBuilder,
 ButtonStyle,
+StringSelectMenuBuilder,
 ModalBuilder,
 TextInputBuilder,
 TextInputStyle,
@@ -27,30 +30,26 @@ EmbedBuilder,
 Events,
 REST,
 Routes,
-SlashCommandBuilder,
-StringSelectMenuBuilder
-} = require('discord.js');
+SlashCommandBuilder
+} = require("discord.js");
 
-const {
-TOKEN,
-CLIENT_ID,
-GUILD_ID,
-TARGET_CHANNEL_ID,
-APPROVER_ROLE_ID,
-NOTIFY_ROLE_ID
-} = process.env;
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+const TARGET_CHANNEL_ID = process.env.TARGET_CHANNEL_ID;
+const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 
 const client = new Client({
 intents: [GatewayIntentBits.Guilds]
 });
 
-/* ===== Slash Command ===== */
+/* ========= REGISTER COMMAND ========= */
 
 const commands = [
 new SlashCommandBuilder()
 .setName("panel")
-.setDescription("เปิดแผงยื่นคำขอลา"),
-].map(cmd => cmd.toJSON());
+.setDescription("เปิดเมนูยื่นคำขอลา")
+].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
@@ -63,11 +62,18 @@ Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 );
 }
 
-/* ===== Memory ===== */
+/* ========= MEMORY ========= */
 
 const leaveState = new Map();
 
-/* ===== Helpers ===== */
+/* ========= BOT READY ========= */
+
+client.once(Events.ClientReady, async () => {
+console.log("Bot Online: " + client.user.tag);
+await registerCommands();
+});
+
+/* ========= FUNCTIONS ========= */
 
 function thaiDate(date) {
 return date.toLocaleDateString("th-TH", {
@@ -82,67 +88,77 @@ const diff = end - start;
 return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
 }
 
-/* ===== Bot Ready ===== */
-
-client.once(Events.ClientReady, async () => {
-console.log(`Online: ${client.user.tag}`);
-await registerCommands();
-});
-
-/* ===== Interaction ===== */
+/* ========= INTERACTION ========= */
 
 client.on(Events.InteractionCreate, async interaction => {
 
 try {
 
 ```
-/* PANEL COMMAND */
+/* ===== PANEL COMMAND ===== */
 
-if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
+if (interaction.isChatInputCommand()) {
 
-  const embed = new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setTitle("📄 แบบฟอร์มยื่นคำขอลา")
-    .setDescription("กดปุ่มด้านล่างเพื่อยื่นคำขอลา");
+  if (interaction.commandName === "panel") {
 
-  const btn = new ButtonBuilder()
-    .setCustomId("leave_request")
-    .setLabel("ยื่นคำขอลา")
-    .setStyle(ButtonStyle.Primary);
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setTitle("📄 แบบฟอร์มยื่นคำขอลา")
+      .setDescription("กดปุ่มด้านล่างเพื่อยื่นคำขอลา");
 
-  return interaction.reply({
-    embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(btn)]
-  });
+    const btn = new ButtonBuilder()
+      .setCustomId("leave_request")
+      .setLabel("ยื่นคำขอลา")
+      .setStyle(ButtonStyle.Primary);
+
+    return interaction.reply({
+      embeds: [embed],
+      components: [
+        new ActionRowBuilder().addComponents(btn)
+      ]
+    });
+
+  }
+
 }
 
-/* BUTTON */
+/* ===== BUTTON ===== */
 
-if (interaction.isButton() && interaction.customId === "leave_request") {
+if (interaction.isButton()) {
 
-  leaveState.set(interaction.user.id, {});
+  if (interaction.customId === "leave_request") {
 
-  const yearMenu = new StringSelectMenuBuilder()
-    .setCustomId("year")
-    .setPlaceholder("เลือกปี")
-    .addOptions(
-      Array.from({ length: 5 }, (_, i) => {
-        const y = new Date().getFullYear() + i + 543;
-        return {
-          label: String(y),
-          value: String(y - 543)
-        };
-      })
-    );
+    leaveState.set(interaction.user.id, {});
 
-  return interaction.reply({
-    content: "เลือกปีที่จะกลับมา",
-    components: [new ActionRowBuilder().addComponents(yearMenu)],
-    ephemeral: true
-  });
+    const yearMenu = new StringSelectMenuBuilder()
+      .setCustomId("year")
+      .setPlaceholder("เลือกปี")
+      .addOptions(
+        Array.from({ length: 5 }, (_, i) => {
+
+          const y = new Date().getFullYear() + i + 543;
+
+          return {
+            label: String(y),
+            value: String(y - 543)
+          };
+
+        })
+      );
+
+    return interaction.reply({
+      content: "เลือกปีที่จะกลับมา",
+      components: [
+        new ActionRowBuilder().addComponents(yearMenu)
+      ],
+      ephemeral: true
+    });
+
+  }
+
 }
 
-/* SELECT MENU */
+/* ===== SELECT MENU ===== */
 
 if (interaction.isStringSelectMenu()) {
 
@@ -169,8 +185,11 @@ if (interaction.isStringSelectMenu()) {
 
     return interaction.update({
       content: "เลือกเดือน",
-      components: [new ActionRowBuilder().addComponents(monthMenu)]
+      components: [
+        new ActionRowBuilder().addComponents(monthMenu)
+      ]
     });
+
   }
 
   /* MONTH */
@@ -178,6 +197,7 @@ if (interaction.isStringSelectMenu()) {
   if (interaction.customId === "month") {
 
     state.month = Number(value);
+
     const days = new Date(state.year, state.month + 1, 0).getDate();
 
     const ranges = [];
@@ -187,9 +207,10 @@ if (interaction.isStringSelectMenu()) {
       const end = Math.min(i + 24, days);
 
       ranges.push({
-        label: `วันที่ ${i} - ${end}`,
-        value: `${i}-${end}`
+        label: "วันที่ " + i + " - " + end,
+        value: i + "-" + end
       });
+
     }
 
     const rangeMenu = new StringSelectMenuBuilder()
@@ -201,33 +222,44 @@ if (interaction.isStringSelectMenu()) {
 
     return interaction.update({
       content: "เลือกช่วงวัน",
-      components: [new ActionRowBuilder().addComponents(rangeMenu)]
+      components: [
+        new ActionRowBuilder().addComponents(rangeMenu)
+      ]
     });
+
   }
 
   /* DAY RANGE */
 
   if (interaction.customId === "day_range") {
 
-    const [start, end] = value.split("-").map(Number);
+    const parts = value.split("-");
+    const start = Number(parts[0]);
+    const end = Number(parts[1]);
 
     const dayMenu = new StringSelectMenuBuilder()
       .setCustomId("day")
       .setPlaceholder("เลือกวัน")
       .addOptions(
         Array.from({ length: end - start + 1 }, (_, i) => {
-          const day = start + i;
+
+          const d = start + i;
+
           return {
-            label: String(day),
-            value: String(day)
+            label: String(d),
+            value: String(d)
           };
+
         })
       );
 
     return interaction.update({
       content: "เลือกวันจะกลับเข้าเวร",
-      components: [new ActionRowBuilder().addComponents(dayMenu)]
+      components: [
+        new ActionRowBuilder().addComponents(dayMenu)
+      ]
     });
+
   }
 
   /* DAY */
@@ -235,84 +267,86 @@ if (interaction.isStringSelectMenu()) {
   if (interaction.customId === "day") {
 
     state.day = Number(value);
+
     leaveState.set(interaction.user.id, state);
 
     const modal = new ModalBuilder()
       .setCustomId("reason_modal")
-      .setTitle("กรอกเหตุผลการลา");
+      .setTitle("เหตุผลการลา");
+
+    const reasonInput = new TextInputBuilder()
+      .setCustomId("reason")
+      .setLabel("เหตุผล")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
 
     modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("reason")
-          .setLabel("เหตุผล")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(true)
-      )
+      new ActionRowBuilder().addComponents(reasonInput)
     );
 
     return interaction.showModal(modal);
+
   }
+
 }
 
-/* MODAL SUBMIT */
+/* ===== MODAL ===== */
 
-if (interaction.isModalSubmit() && interaction.customId === "reason_modal") {
+if (interaction.isModalSubmit()) {
 
-  const state = leaveState.get(interaction.user.id);
-  const reason = interaction.fields.getTextInputValue("reason");
+  if (interaction.customId === "reason_modal") {
 
-  const startDate = new Date();
-  const returnDate = new Date(state.year, state.month, state.day);
+    const state = leaveState.get(interaction.user.id);
 
-  const embed = new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setTitle("📄 คำขอลา")
-    .setDescription(
-```
+    const reason = interaction.fields.getTextInputValue("reason");
 
-`👤 ผู้ยื่น: <@${interaction.user.id}>
+    const startDate = new Date();
+    const returnDate = new Date(state.year, state.month, state.day);
 
-📅 วันที่ยื่น: ${thaiDate(startDate)}
-📅 วันที่กลับมา: ${thaiDate(returnDate)}
-📆 จำนวนวันที่ลา: ${countDays(startDate, returnDate)} วัน
+    const embed = new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setTitle("📄 คำขอลา")
+      .setDescription(
+        "👤 ผู้ยื่น: <@" + interaction.user.id + ">\n\n" +
+        "📅 วันที่ยื่น: " + thaiDate(startDate) + "\n" +
+        "📅 วันที่กลับมา: " + thaiDate(returnDate) + "\n" +
+        "📆 จำนวนวันที่ลา: " + countDays(startDate, returnDate) + " วัน\n\n" +
+        "📝 เหตุผล:\n" + reason + "\n\n" +
+        "⏳ สถานะ: รออนุมัติ"
+      )
+      .setTimestamp();
 
-📝 เหตุผล:
-${reason}
+    const row = new ActionRowBuilder().addComponents(
 
-⏳ สถานะ: รออนุมัติ`
-)
-.setTimestamp();
+      new ButtonBuilder()
+        .setCustomId("approve_" + interaction.user.id)
+        .setLabel("อนุมัติ")
+        .setStyle(ButtonStyle.Success),
 
-```
-  const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("reject_" + interaction.user.id)
+        .setLabel("ปฏิเสธ")
+        .setStyle(ButtonStyle.Danger)
 
-    new ButtonBuilder()
-      .setCustomId(`approve_${interaction.user.id}`)
-      .setLabel("อนุมัติ")
-      .setStyle(ButtonStyle.Success),
+    );
 
-    new ButtonBuilder()
-      .setCustomId(`reject_${interaction.user.id}`)
-      .setLabel("ปฏิเสธ")
-      .setStyle(ButtonStyle.Danger)
+    const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
 
-  );
+    await channel.send({
+      content: NOTIFY_ROLE_ID ? "<@&" + NOTIFY_ROLE_ID + ">" : null,
+      embeds: [embed],
+      components: [row]
+    });
 
-  const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
+    leaveState.delete(interaction.user.id);
 
-  await channel.send({
-    content: NOTIFY_ROLE_ID ? `<@&${NOTIFY_ROLE_ID}>` : undefined,
-    embeds: [embed],
-    components: [row]
-  });
+    return interaction.reply({
+      content: "ส่งคำขอแล้ว",
+      ephemeral: true
+    });
 
-  leaveState.delete(interaction.user.id);
+  }
 
-  return interaction.reply({
-    content: "ส่งคำขอแล้ว",
-    ephemeral: true
-  });
 }
 ```
 
@@ -321,8 +355,8 @@ ${reason}
 ```
 console.error(err);
 
-if (interaction.replied || interaction.deferred) {
-  interaction.editReply({ content: "เกิดข้อผิดพลาด" });
+if (interaction.replied) {
+  interaction.editReply("เกิดข้อผิดพลาด");
 } else {
   interaction.reply({ content: "เกิดข้อผิดพลาด", ephemeral: true });
 }
@@ -332,11 +366,11 @@ if (interaction.replied || interaction.deferred) {
 
 });
 
-/* ===== Error Protection ===== */
+/* ========= ERROR PROTECT ========= */
 
 process.on("unhandledRejection", console.error);
 process.on("uncaughtException", console.error);
 
-/* ============================ */
+/* ========= LOGIN ========= */
 
 client.login(TOKEN);
