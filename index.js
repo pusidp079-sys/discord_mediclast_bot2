@@ -15,11 +15,20 @@ console.log("Web server running on port " + PORT);
 /* ============================= */
 
 const {
-Client, GatewayIntentBits,
-ActionRowBuilder, ButtonBuilder, ButtonStyle,
-ModalBuilder, TextInputBuilder, TextInputStyle,
-EmbedBuilder, Events, REST, Routes,
-SlashCommandBuilder, StringSelectMenuBuilder
+Client,
+GatewayIntentBits,
+ActionRowBuilder,
+ButtonBuilder,
+ButtonStyle,
+ModalBuilder,
+TextInputBuilder,
+TextInputStyle,
+EmbedBuilder,
+Events,
+REST,
+Routes,
+SlashCommandBuilder,
+StringSelectMenuBuilder
 } = require('discord.js');
 
 const {
@@ -35,23 +44,30 @@ const client = new Client({
 intents: [GatewayIntentBits.Guilds]
 });
 
+/* ===== Slash Command ===== */
+
 const commands = [
 new SlashCommandBuilder()
 .setName("panel")
 .setDescription("เปิดแผงยื่นคำขอลา"),
-].map(c => c.toJSON());
+].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 async function registerCommands() {
 if (!CLIENT_ID || !GUILD_ID) return;
+
 await rest.put(
 Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 { body: commands }
 );
 }
 
+/* ===== Memory ===== */
+
 const leaveState = new Map();
+
+/* ===== Helpers ===== */
 
 function thaiDate(date) {
 return date.toLocaleDateString("th-TH", {
@@ -66,16 +82,22 @@ const diff = end - start;
 return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
 }
 
+/* ===== Bot Ready ===== */
+
 client.once(Events.ClientReady, async () => {
 console.log(`Online: ${client.user.tag}`);
 await registerCommands();
 });
 
+/* ===== Interaction ===== */
+
 client.on(Events.InteractionCreate, async interaction => {
+
 try {
 
 ```
-/* ===== Slash Command ===== */
+/* PANEL COMMAND */
+
 if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
 
   const embed = new EmbedBuilder()
@@ -94,7 +116,8 @@ if (interaction.isChatInputCommand() && interaction.commandName === "panel") {
   });
 }
 
-/* ===== Button ===== */
+/* BUTTON */
+
 if (interaction.isButton() && interaction.customId === "leave_request") {
 
   leaveState.set(interaction.user.id, {});
@@ -105,7 +128,10 @@ if (interaction.isButton() && interaction.customId === "leave_request") {
     .addOptions(
       Array.from({ length: 5 }, (_, i) => {
         const y = new Date().getFullYear() + i + 543;
-        return { label: String(y), value: String(y - 543) };
+        return {
+          label: String(y),
+          value: String(y - 543)
+        };
       })
     );
 
@@ -116,13 +142,15 @@ if (interaction.isButton() && interaction.customId === "leave_request") {
   });
 }
 
-/* ===== Select Menu ===== */
+/* SELECT MENU */
+
 if (interaction.isStringSelectMenu()) {
 
   const state = leaveState.get(interaction.user.id) || {};
   const value = interaction.values[0];
 
-  /* เลือกปี */
+  /* YEAR */
+
   if (interaction.customId === "year") {
 
     state.year = Number(value);
@@ -145,7 +173,8 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
-  /* เลือกเดือน */
+  /* MONTH */
+
   if (interaction.customId === "month") {
 
     state.month = Number(value);
@@ -154,6 +183,7 @@ if (interaction.isStringSelectMenu()) {
     const ranges = [];
 
     for (let i = 1; i <= days; i += 25) {
+
       const end = Math.min(i + 24, days);
 
       ranges.push({
@@ -175,7 +205,8 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
-  /* เลือกช่วงวัน */
+  /* DAY RANGE */
+
   if (interaction.customId === "day_range") {
 
     const [start, end] = value.split("-").map(Number);
@@ -186,7 +217,10 @@ if (interaction.isStringSelectMenu()) {
       .addOptions(
         Array.from({ length: end - start + 1 }, (_, i) => {
           const day = start + i;
-          return { label: String(day), value: String(day) };
+          return {
+            label: String(day),
+            value: String(day)
+          };
         })
       );
 
@@ -196,7 +230,8 @@ if (interaction.isStringSelectMenu()) {
     });
   }
 
-  /* เลือกวัน */
+  /* DAY */
+
   if (interaction.customId === "day") {
 
     state.day = Number(value);
@@ -220,7 +255,8 @@ if (interaction.isStringSelectMenu()) {
   }
 }
 
-/* ===== Modal Submit ===== */
+/* MODAL SUBMIT */
+
 if (interaction.isModalSubmit() && interaction.customId === "reason_modal") {
 
   const state = leaveState.get(interaction.user.id);
@@ -250,6 +286,7 @@ ${reason}
 
 ```
   const row = new ActionRowBuilder().addComponents(
+
     new ButtonBuilder()
       .setCustomId(`approve_${interaction.user.id}`)
       .setLabel("อนุมัติ")
@@ -259,6 +296,7 @@ ${reason}
       .setCustomId(`reject_${interaction.user.id}`)
       .setLabel("ปฏิเสธ")
       .setStyle(ButtonStyle.Danger)
+
   );
 
   const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
@@ -283,7 +321,7 @@ ${reason}
 ```
 console.error(err);
 
-if (interaction.deferred || interaction.replied) {
+if (interaction.replied || interaction.deferred) {
   interaction.editReply({ content: "เกิดข้อผิดพลาด" });
 } else {
   interaction.reply({ content: "เกิดข้อผิดพลาด", ephemeral: true });
@@ -291,11 +329,14 @@ if (interaction.deferred || interaction.replied) {
 ```
 
 }
+
 });
 
 /* ===== Error Protection ===== */
+
 process.on("unhandledRejection", console.error);
 process.on("uncaughtException", console.error);
+
 /* ============================ */
 
 client.login(TOKEN);
