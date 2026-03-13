@@ -17,6 +17,8 @@ Routes,
 SlashCommandBuilder
 } = require("discord.js");
 
+const { google } = require("googleapis");
+
 /* ================= WEB SERVER ================= */
 
 const app = express();
@@ -31,7 +33,20 @@ const GUILD_ID = process.env.GUILD_ID;
 const TARGET_CHANNEL_ID = process.env.TARGET_CHANNEL_ID;
 const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
-const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+
+/* ================= GOOGLE SHEETS ================= */
+
+const auth = new google.auth.GoogleAuth({
+keyFile: "google-key.json",
+scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+});
+
+const sheets = google.sheets({
+version: "v4",
+auth
+});
+
+const SPREADSHEET_ID = "1q2JM4dStTp2rF0ztiA_eZA5oMz9e0Q_3hdHiv8wRZlY";
 
 /* ================= CLIENT ================= */
 
@@ -42,19 +57,20 @@ intents: [GatewayIntentBits.Guilds]
 /* ================= COMMAND ================= */
 
 const commands = [
-new SlashCommandBuilder()
-.setName("ลา")
-.setDescription("ส่งคำขอลา"),
 
 new SlashCommandBuilder()
 .setName("panel")
-.setDescription("สร้างแผงยื่นคำขอลา")
-].map(c => c.toJSON());
+.setDescription("สร้างแผงยื่นคำขอลา"),
+
+new SlashCommandBuilder()
+.setName("leave-list")
+.setDescription("ดูรายการลาทั้งหมด")
+
+].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
-try {
 
 await rest.put(
 Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
@@ -63,9 +79,6 @@ Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 
 console.log("✅ Slash command registered");
 
-} catch (err) {
-console.error(err);
-}
 })();
 
 /* ================= READY ================= */
@@ -76,200 +89,261 @@ console.log(`✅ Logged in as ${client.user.tag}`);
 
 });
 
+/* ================= FUNCTIONS ================= */
+
+function calculateLeaveDays(start,end){
+
+const startDate = new Date(start);
+const endDate = new Date(end);
+
+if(isNaN(startDate) || isNaN(endDate)) return null;
+
+const diff = endDate - startDate;
+
+return diff/(1000*60*60*24)+1;
+
+}
+
+async function saveLeave(user,start,end,days,reason,status){
+
+await sheets.spreadsheets.values.append({
+
+spreadsheetId: SPREADSHEET_ID,
+
+range:"Sheet1!A:F",
+
+valueInputOption:"USER_ENTERED",
+
+requestBody:{
+values:[[user,start,end,days,reason,status]]
+}
+
+});
+
+}
+
+async function getLeaves(){
+
+const res = await sheets.spreadsheets.values.get({
+
+spreadsheetId:SPREADSHEET_ID,
+
+range:"Sheet1!A:F"
+
+});
+
+return res.data.values || [];
+
+}
+
 /* ================= INTERACTION ================= */
 
 client.on(Events.InteractionCreate, async interaction => {
 
-try {
+try{
 
-/* ================= COMMAND ================= */
+/* ===== COMMAND ===== */
 
-if (interaction.isChatInputCommand()) {
+if(interaction.isChatInputCommand()){
 
-if (interaction.commandName === "panel") {
+if(interaction.commandName==="panel"){
 
-const embed = new EmbedBuilder()
-.setTitle("📄 แบบฟอร์มยื่นคำขอลา")
-.setDescription(
-`กดปุ่มด้านล่างเพื่อยื่นคำขอลา
-────────────
-ระบบลาออนไลน์`
-)
+const embed=new EmbedBuilder()
+.setTitle("📄 ระบบยื่นคำขอลา")
+.setDescription("กดปุ่มด้านล่างเพื่อยื่นคำขอลา")
 .setColor(0x2b2d31);
 
-const button = new ButtonBuilder()
+const button=new ButtonBuilder()
 .setCustomId("leave_request")
 .setLabel("ยื่นคำขอลา")
 .setStyle(ButtonStyle.Primary);
 
-const row = new ActionRowBuilder().addComponents(button);
+const row=new ActionRowBuilder().addComponents(button);
 
-await interaction.reply({
-embeds: [embed],
-components: [row]
+return interaction.reply({
+embeds:[embed],
+components:[row]
 });
 
 }
 
-if (interaction.commandName === "ลา") {
+/* ===== LEAVE LIST ===== */
 
-const modal = createLeaveModal();
-await interaction.showModal(modal);
+if(interaction.commandName==="leave-list"){
+
+const rows=await getLeaves();
+
+if(rows.length<=1){
+
+return interaction.reply({
+content:"❌ ยังไม่มีข้อมูล",
+ephemeral:true
+});
+
+}
+
+let text="";
+
+rows.slice(1).forEach((r,i)=>{
+
+text+=`${i+1}. <@${r[0]}>
+📅 ${r[1]} → ${r[2]}
+📆 ${r[3]} วัน
+📄 ${r[4]}
+📌 ${r[5]}
+
+`;
+
+});
+
+const embed=new EmbedBuilder()
+.setTitle("📋 รายการลาทั้งหมด")
+.setDescription(text)
+.setColor(0x2b2d31);
+
+return interaction.reply({embeds:[embed]});
 
 }
 
 }
 
-/* ================= BUTTON ================= */
+/* ===== BUTTON ===== */
 
-if (interaction.isButton()) {
+if(interaction.isButton()){
 
-/* ===== PANEL BUTTON ===== */
+if(interaction.customId==="leave_request"){
 
-if (interaction.customId === "leave_request") {
+const modal=new ModalBuilder()
+.setCustomId("leave_modal")
+.setTitle("ยื่นคำขอลา");
 
-const modal = createLeaveModal();
+const start=new TextInputBuilder()
+.setCustomId("start")
+.setLabel("วันที่เริ่ม (YYYY-MM-DD)")
+.setStyle(TextInputStyle.Short);
+
+const end=new TextInputBuilder()
+.setCustomId("end")
+.setLabel("วันที่สิ้นสุด (YYYY-MM-DD)")
+.setStyle(TextInputStyle.Short);
+
+const reason=new TextInputBuilder()
+.setCustomId("reason")
+.setLabel("เหตุผล")
+.setStyle(TextInputStyle.Paragraph);
+
+modal.addComponents(
+new ActionRowBuilder().addComponents(start),
+new ActionRowBuilder().addComponents(end),
+new ActionRowBuilder().addComponents(reason)
+);
+
 return interaction.showModal(modal);
 
 }
 
-/* ===== APPROVE / REJECT ===== */
+/* ===== APPROVE ===== */
 
-if (interaction.customId.startsWith("approve_") || interaction.customId.startsWith("reject_")) {
+if(interaction.customId.startsWith("approve_")){
 
-if (!interaction.member.roles.cache.has(APPROVER_ROLE_ID)) {
+if(!interaction.member.roles.cache.has(APPROVER_ROLE_ID)){
 
 return interaction.reply({
-content: "❌ คุณไม่มีสิทธิ์",
-ephemeral: true
+content:"❌ คุณไม่มีสิทธิ์",
+ephemeral:true
 });
 
 }
 
-const embed = interaction.message.embeds[0];
+const embed=interaction.message.embeds[0];
 
-if (!embed.description.includes("รออนุมัติ")) {
+const userId=interaction.customId.split("_")[1];
 
-return interaction.reply({
-content: "❌ รายการนี้ถูกดำเนินการแล้ว",
-ephemeral: true
-});
-
-}
-
-const userId = interaction.customId.split("_")[1];
-
-let status = "";
-let color = 0x2b2d31;
-
-if (interaction.customId.startsWith("approve_")) {
-
-status = "✅ อนุมัติแล้ว";
-color = 0x57F287;
-
-} else {
-
-status = "❌ ปฏิเสธ";
-color = 0xED4245;
-
-}
-
-const newEmbed = EmbedBuilder.from(embed)
-.setColor(color)
-.setDescription(
-embed.description.replace(
+const newEmbed=EmbedBuilder.from(embed)
+.setColor(0x57F287)
+.setDescription(embed.description.replace(
 "⏳ สถานะ: รออนุมัติ",
-`${status}
+`✅ อนุมัติแล้ว
 👮 ผู้อนุมัติ: ${interaction.user}`
-)
-);
+));
 
 await interaction.update({
-embeds: [newEmbed],
-components: []
-});
-
-/* ===== DM USER ===== */
-
-const member = await interaction.guild.members.fetch(userId).catch(()=>null);
-
-if (member) {
-
-try {
-
-await member.send({
-embeds: [
-new EmbedBuilder()
-.setTitle("ผลคำขอลา")
-.setDescription(
-`สถานะ: ${status}
-ผู้อนุมัติ: ${interaction.user}`
-)
-.setColor(color)
-]
-});
-
-} catch {}
-
-}
-
-/* ===== LOG ===== */
-
-if (LOG_CHANNEL_ID) {
-
-const log = await client.channels.fetch(LOG_CHANNEL_ID).catch(()=>null);
-
-if (log) {
-
-log.send({
-embeds: [
-new EmbedBuilder()
-.setTitle("📋 Log ระบบลา")
-.setDescription(
-`ผู้ยื่น: <@${userId}>
-ผล: ${status}
-ผู้อนุมัติ: ${interaction.user}`
-)
-.setColor(color)
-.setTimestamp()
-]
+embeds:[newEmbed],
+components:[]
 });
 
 }
 
-}
+/* ===== REJECT ===== */
+
+if(interaction.customId.startsWith("reject_")){
+
+const modal=new ModalBuilder()
+.setCustomId(`reject_modal_${interaction.customId.split("_")[1]}`)
+.setTitle("เหตุผลการปฏิเสธ");
+
+const reason=new TextInputBuilder()
+.setCustomId("reject_reason")
+.setLabel("เหตุผล")
+.setStyle(TextInputStyle.Paragraph);
+
+modal.addComponents(
+new ActionRowBuilder().addComponents(reason)
+);
+
+return interaction.showModal(modal);
 
 }
 
 }
 
-/* ================= MODAL ================= */
+/* ===== MODAL ===== */
 
-if (interaction.isModalSubmit()) {
+if(interaction.isModalSubmit()){
 
-if (interaction.customId === "leave_modal") {
+if(interaction.customId==="leave_modal"){
 
-const start = interaction.fields.getTextInputValue("start");
-const end = interaction.fields.getTextInputValue("end");
-const reason = interaction.fields.getTextInputValue("reason");
+const start=interaction.fields.getTextInputValue("start");
+const end=interaction.fields.getTextInputValue("end");
+const reason=interaction.fields.getTextInputValue("reason");
 
-const embed = new EmbedBuilder()
+const days=calculateLeaveDays(start,end);
+
+if(!days){
+
+return interaction.reply({
+content:"❌ วันที่ไม่ถูกต้อง",
+ephemeral:true
+});
+
+}
+
+await saveLeave(
+interaction.user.id,
+start,
+end,
+days,
+reason,
+"รออนุมัติ"
+);
+
+const embed=new EmbedBuilder()
 .setTitle("📄 คำขอลา")
 .setDescription(
 `👤 ผู้ยื่น: ${interaction.user}
 
 📅 วันที่เริ่ม: ${start}
 📅 วันที่สิ้นสุด: ${end}
+📆 จำนวนวันลา: ${days} วัน
 
-📝 เหตุผล:
+📝 เหตุผล
 ${reason}
 
 ⏳ สถานะ: รออนุมัติ`
 )
-.setColor(0x2b2d31)
-.setTimestamp();
+.setColor(0x2b2d31);
 
-const buttons = new ActionRowBuilder().addComponents(
+const row=new ActionRowBuilder().addComponents(
 
 new ButtonBuilder()
 .setCustomId(`approve_${interaction.user.id}`)
@@ -283,69 +357,60 @@ new ButtonBuilder()
 
 );
 
-const channel = await client.channels.fetch(TARGET_CHANNEL_ID);
+const channel=await client.channels.fetch(TARGET_CHANNEL_ID);
 
 await channel.send({
-content: `<@&${NOTIFY_ROLE_ID}>`,
-embeds: [embed],
-components: [buttons]
+content:`<@&${process.env.NOTIFY_ROLE_ID}>`,
+embeds:[embed],
+components:[row]
 });
 
-await interaction.reply({
-content: "✅ ส่งคำขอลาเรียบร้อย",
-ephemeral: true
+return interaction.reply({
+content:"✅ ส่งคำขอลาเรียบร้อย",
+ephemeral:true
+});
+
+}
+
+if(interaction.customId.startsWith("reject_modal_")){
+
+const reason=interaction.fields.getTextInputValue("reject_reason");
+
+const embed=interaction.message.embeds[0];
+
+const newEmbed=EmbedBuilder.from(embed)
+.setColor(0xED4245)
+.setDescription(embed.description.replace(
+"⏳ สถานะ: รออนุมัติ",
+`❌ ปฏิเสธ
+เหตุผล: ${reason}
+👮 ผู้ดำเนินการ: ${interaction.user}`
+));
+
+await interaction.update({
+embeds:[newEmbed],
+components:[]
 });
 
 }
 
 }
 
-} catch (err) {
+}catch(err){
 
 console.error(err);
 
-if (interaction.replied || interaction.deferred) return;
+if(!interaction.replied){
 
 interaction.reply({
-content: "❌ ระบบเกิดข้อผิดพลาด",
-ephemeral: true
+content:"❌ เกิดข้อผิดพลาด",
+ephemeral:true
 });
 
 }
 
-});
-
-/* ================= MODAL FUNCTION ================= */
-
-function createLeaveModal(){
-
-const modal = new ModalBuilder()
-.setCustomId("leave_modal")
-.setTitle("คำขอลา");
-
-const start = new TextInputBuilder()
-.setCustomId("start")
-.setLabel("วันที่เริ่มลา")
-.setStyle(TextInputStyle.Short);
-
-const end = new TextInputBuilder()
-.setCustomId("end")
-.setLabel("วันที่สิ้นสุด")
-.setStyle(TextInputStyle.Short);
-
-const reason = new TextInputBuilder()
-.setCustomId("reason")
-.setLabel("เหตุผล")
-.setStyle(TextInputStyle.Paragraph);
-
-modal.addComponents(
-new ActionRowBuilder().addComponents(start),
-new ActionRowBuilder().addComponents(end),
-new ActionRowBuilder().addComponents(reason)
-);
-
-return modal;
-
 }
+
+});
 
 client.login(TOKEN);
