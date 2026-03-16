@@ -25,28 +25,28 @@ const client = new Client({
   ]
 });
 
-// Ready
-client.once("ready", () => {
+// Bot Ready
+client.once("ready", function () {
   console.log("Logged in as " + client.user.tag);
 });
 
-// Error
-client.on("error", (err) => {
+// Error handler
+client.on("error", function (err) {
   console.error("Discord Error:", err);
 });
 
 // Login
-client.login(TOKEN).catch(console.error);
+client.login(TOKEN);
 
-// Express Server (สำหรับ Render)
+// Web server สำหรับ Render
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.get("/", (req, res) => {
-  res.send("Discord bot is running");
+app.get("/", function (req, res) {
+  res.send("Discord Bot Running");
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, function () {
   console.log("Web server running on port " + PORT);
 });
 ```
