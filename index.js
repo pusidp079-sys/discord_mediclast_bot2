@@ -20,8 +20,16 @@ SlashCommandBuilder
 /* ================= WEB SERVER ================= */
 
 const app = express();
-app.get("/", (req, res) => res.send("Bot running"));
-app.listen(10000, () => console.log("🌐 Web server running"));
+
+app.get("/", (req, res) => {
+res.send("Bot running");
+});
+
+const PORT = process.env.PORT || 10000;
+
+app.listen(PORT, () => {
+console.log("🌐 Web server running on port " + PORT);
+});
 
 /* ================= ENV ================= */
 
@@ -32,6 +40,9 @@ const TARGET_CHANNEL_ID = process.env.TARGET_CHANNEL_ID;
 const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+
+console.log("ENV CHECK");
+console.log("TOKEN:", TOKEN ? "FOUND" : "NOT FOUND");
 
 /* ================= CLIENT ================= */
 
@@ -49,11 +60,13 @@ new SlashCommandBuilder()
 new SlashCommandBuilder()
 .setName("panel")
 .setDescription("สร้างแผงยื่นคำขอลา")
+
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
+
 try {
 
 await rest.put(
@@ -64,8 +77,11 @@ Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 console.log("✅ Slash command registered");
 
 } catch (err) {
-console.error(err);
+
+console.error("COMMAND ERROR:", err);
+
 }
+
 })();
 
 /* ================= READY ================= */
@@ -90,11 +106,9 @@ if (interaction.commandName === "panel") {
 
 const embed = new EmbedBuilder()
 .setTitle("📄 แบบฟอร์มยื่นคำขอลา")
-.setDescription(
-`กดปุ่มด้านล่างเพื่อยื่นคำขอลา
+.setDescription(`กดปุ่มด้านล่างเพื่อยื่นคำขอลา
 ────────────
-ระบบลาออนไลน์`
-)
+ระบบลาออนไลน์`)
 .setColor(0x2b2d31);
 
 const button = new ButtonBuilder()
@@ -124,7 +138,7 @@ await interaction.showModal(modal);
 
 if (interaction.isButton()) {
 
-/* ===== PANEL BUTTON ===== */
+/* PANEL BUTTON */
 
 if (interaction.customId === "leave_request") {
 
@@ -133,7 +147,7 @@ return interaction.showModal(modal);
 
 }
 
-/* ===== APPROVE / REJECT ===== */
+/* APPROVE / REJECT */
 
 if (interaction.customId.startsWith("approve_") || interaction.customId.startsWith("reject_")) {
 
@@ -189,7 +203,7 @@ embeds: [newEmbed],
 components: []
 });
 
-/* ===== DM USER ===== */
+/* DM USER */
 
 const member = await interaction.guild.members.fetch(userId).catch(()=>null);
 
@@ -201,10 +215,8 @@ await member.send({
 embeds: [
 new EmbedBuilder()
 .setTitle("ผลคำขอลา")
-.setDescription(
-`สถานะ: ${status}
-ผู้อนุมัติ: ${interaction.user}`
-)
+.setDescription(`สถานะ: ${status}
+ผู้อนุมัติ: ${interaction.user}`)
 .setColor(color)
 ]
 });
@@ -213,7 +225,7 @@ new EmbedBuilder()
 
 }
 
-/* ===== LOG ===== */
+/* LOG */
 
 if (LOG_CHANNEL_ID) {
 
@@ -225,11 +237,9 @@ log.send({
 embeds: [
 new EmbedBuilder()
 .setTitle("📋 Log ระบบลา")
-.setDescription(
-`ผู้ยื่น: <@${userId}>
+.setDescription(`ผู้ยื่น: <@${userId}>
 ผล: ${status}
-ผู้อนุมัติ: ${interaction.user}`
-)
+ผู้อนุมัติ: ${interaction.user}`)
 .setColor(color)
 .setTimestamp()
 ]
@@ -255,8 +265,7 @@ const reason = interaction.fields.getTextInputValue("reason");
 
 const embed = new EmbedBuilder()
 .setTitle("📄 คำขอลา")
-.setDescription(
-`👤 ผู้ยื่น: ${interaction.user}
+.setDescription(`👤 ผู้ยื่น: ${interaction.user}
 
 📅 วันที่เริ่ม: ${start}
 📅 วันที่สิ้นสุด: ${end}
@@ -264,8 +273,7 @@ const embed = new EmbedBuilder()
 📝 เหตุผล:
 ${reason}
 
-⏳ สถานะ: รออนุมัติ`
-)
+⏳ สถานะ: รออนุมัติ`)
 .setColor(0x2b2d31)
 .setTimestamp();
 
@@ -302,7 +310,7 @@ ephemeral: true
 
 } catch (err) {
 
-console.error(err);
+console.error("INTERACTION ERROR:", err);
 
 if (interaction.replied || interaction.deferred) return;
 
@@ -348,4 +356,8 @@ return modal;
 
 }
 
-client.login(TOKEN);
+/* ================= LOGIN ================= */
+
+client.login(TOKEN).catch(err => {
+console.error("❌ LOGIN ERROR:", err);
+});
