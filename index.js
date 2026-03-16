@@ -17,6 +17,10 @@ Routes,
 SlashCommandBuilder
 } = require("discord.js");
 
+/* ================= START ================= */
+
+console.log("🚀 BOT STARTING...");
+
 /* ================= WEB SERVER ================= */
 
 const app = express();
@@ -41,8 +45,7 @@ const APPROVER_ROLE_ID = process.env.APPROVER_ROLE_ID;
 const NOTIFY_ROLE_ID = process.env.NOTIFY_ROLE_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
-console.log("ENV CHECK");
-console.log("TOKEN:", TOKEN ? "FOUND" : "NOT FOUND");
+console.log("ENV CHECK:", TOKEN ? "TOKEN FOUND" : "TOKEN NOT FOUND");
 
 /* ================= CLIENT ================= */
 
@@ -50,9 +53,18 @@ const client = new Client({
 intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= COMMAND ================= */
+/* ================= READY ================= */
+
+client.once("ready", async () => {
+
+console.log(`✅ Logged in as ${client.user.tag}`);
+
+/* REGISTER COMMAND */
+
+try {
 
 const commands = [
+
 new SlashCommandBuilder()
 .setName("ลา")
 .setDescription("ส่งคำขอลา"),
@@ -65,10 +77,6 @@ new SlashCommandBuilder()
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-(async () => {
-
-try {
-
 await rest.put(
 Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 { body: commands }
@@ -78,17 +86,9 @@ console.log("✅ Slash command registered");
 
 } catch (err) {
 
-console.error("COMMAND ERROR:", err);
+console.error("❌ COMMAND REGISTER ERROR:", err);
 
 }
-
-})();
-
-/* ================= READY ================= */
-
-client.once("ready", () => {
-
-console.log(`✅ Logged in as ${client.user.tag}`);
 
 });
 
@@ -98,7 +98,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
 try {
 
-/* ================= COMMAND ================= */
+/* ===== SLASH COMMAND ===== */
 
 if (interaction.isChatInputCommand()) {
 
@@ -106,9 +106,7 @@ if (interaction.commandName === "panel") {
 
 const embed = new EmbedBuilder()
 .setTitle("📄 แบบฟอร์มยื่นคำขอลา")
-.setDescription(`กดปุ่มด้านล่างเพื่อยื่นคำขอลา
-────────────
-ระบบลาออนไลน์`)
+.setDescription("กดปุ่มด้านล่างเพื่อยื่นคำขอลา")
 .setColor(0x2b2d31);
 
 const button = new ButtonBuilder()
@@ -134,11 +132,9 @@ await interaction.showModal(modal);
 
 }
 
-/* ================= BUTTON ================= */
+/* ===== BUTTON ===== */
 
 if (interaction.isButton()) {
-
-/* PANEL BUTTON */
 
 if (interaction.customId === "leave_request") {
 
@@ -146,8 +142,6 @@ const modal = createLeaveModal();
 return interaction.showModal(modal);
 
 }
-
-/* APPROVE / REJECT */
 
 if (interaction.customId.startsWith("approve_") || interaction.customId.startsWith("reject_")) {
 
@@ -161,15 +155,6 @@ ephemeral: true
 }
 
 const embed = interaction.message.embeds[0];
-
-if (!embed.description.includes("รออนุมัติ")) {
-
-return interaction.reply({
-content: "❌ รายการนี้ถูกดำเนินการแล้ว",
-ephemeral: true
-});
-
-}
 
 const userId = interaction.customId.split("_")[1];
 
@@ -215,8 +200,7 @@ await member.send({
 embeds: [
 new EmbedBuilder()
 .setTitle("ผลคำขอลา")
-.setDescription(`สถานะ: ${status}
-ผู้อนุมัติ: ${interaction.user}`)
+.setDescription(`สถานะ: ${status}`)
 .setColor(color)
 ]
 });
@@ -225,35 +209,11 @@ new EmbedBuilder()
 
 }
 
-/* LOG */
-
-if (LOG_CHANNEL_ID) {
-
-const log = await client.channels.fetch(LOG_CHANNEL_ID).catch(()=>null);
-
-if (log) {
-
-log.send({
-embeds: [
-new EmbedBuilder()
-.setTitle("📋 Log ระบบลา")
-.setDescription(`ผู้ยื่น: <@${userId}>
-ผล: ${status}
-ผู้อนุมัติ: ${interaction.user}`)
-.setColor(color)
-.setTimestamp()
-]
-});
-
 }
 
 }
 
-}
-
-}
-
-/* ================= MODAL ================= */
+/* ===== MODAL ===== */
 
 if (interaction.isModalSubmit()) {
 
@@ -310,14 +270,7 @@ ephemeral: true
 
 } catch (err) {
 
-console.error("INTERACTION ERROR:", err);
-
-if (interaction.replied || interaction.deferred) return;
-
-interaction.reply({
-content: "❌ ระบบเกิดข้อผิดพลาด",
-ephemeral: true
-});
+console.error("❌ INTERACTION ERROR:", err);
 
 }
 
