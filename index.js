@@ -4,18 +4,19 @@ require("dotenv").config();
 const express = require("express");
 const { Client, GatewayIntentBits } = require("discord.js");
 
-console.log("🚀 BOT STARTING...");
+console.log("BOT STARTING");
 
-// ตรวจสอบ TOKEN
+// TOKEN
 const TOKEN = process.env.TOKEN;
+
 if (!TOKEN) {
-  console.log("❌ TOKEN NOT FOUND IN ENV");
+  console.log("TOKEN NOT FOUND");
   process.exit(1);
 }
 
-console.log("ENV CHECK: TOKEN FOUND");
+console.log("TOKEN FOUND");
 
-// สร้าง Discord Client
+// Discord Client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -24,34 +25,28 @@ const client = new Client({
   ]
 });
 
-// เมื่อบอทออนไลน์
+// Ready
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+  console.log("Logged in as " + client.user.tag);
 });
 
-// จัดการ error
+// Error
 client.on("error", (err) => {
-  console.error("❌ Discord Error:", err);
+  console.error("Discord Error:", err);
 });
 
-// Login บอท
-client.login(TOKEN)
-  .then(() => {
-    console.log("🤖 Discord Login Success");
-  })
-  .catch((err) => {
-    console.error("❌ Discord Login Error:", err);
-  });
+// Login
+client.login(TOKEN).catch(console.error);
 
-// Web server สำหรับ Render
+// Express Server (สำหรับ Render)
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get("/", (req, res) => {
-  res.send("Discord Bot is running.");
+  res.send("Discord bot is running");
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 Web server running on port ${PORT}`);
+  console.log("Web server running on port " + PORT);
 });
 ```
